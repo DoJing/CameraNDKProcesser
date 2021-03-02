@@ -28,6 +28,7 @@ import com.yanzhenjie.permission.runtime.Permission;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -50,7 +51,8 @@ public class MainActivity extends AppCompatActivity {
      * @return
      */
     public native String stringFromJNI();
-    public native byte[] transData(byte[] data, int len, int width, int height);
+    public native Bitmap transBitmap(byte[] data, int len, int width, int height);
+    public native boolean transData(byte[] data, int len, int width, int height,double[] R_arr,double[] t_arr);
 
     @SuppressLint("WrongConstant")
     @Override
@@ -97,10 +99,20 @@ public class MainActivity extends AppCompatActivity {
         surfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
         callback_camera = new Camera.PreviewCallback() {
             @Override
-            public void onPreviewFrame(byte[] data, Camera camera) {
+            public void onPreviewFrame(byte[] imgdata, Camera camera) {
                 Camera.Size size = camera.getParameters().getPreviewSize();
-                byte[] data_result = transData(data, data.length, size.width, size.height);
-                Bitmap map = transDataToBitmap(data_result);
+                double[] R_arr = new double[9];
+                double[] t_arr = new double[3];
+                R_arr[0]=1;
+                t_arr[0]=1;
+                long time = System.currentTimeMillis();
+                if(transData(imgdata, imgdata.length, size.width, size.height,R_arr,t_arr)) {
+                    Log.i("R ", Arrays.toString(R_arr));
+                    Log.i("t ", Arrays.toString(t_arr));
+                }
+                time = System.currentTimeMillis() - time;
+                //Log.i("transData time", time + "");
+                Bitmap map = transDataToBitmap(imgdata);
                 iv_preview.setImageBitmap(map);
             }
         };
@@ -108,33 +120,31 @@ public class MainActivity extends AppCompatActivity {
 
     private Bitmap transDataToBitmap(byte[] data) {
         long time = System.currentTimeMillis();
-        byte[] rawImage;
-        ByteArrayOutputStream baos;
         Camera.Size previewSize = camera.getParameters().getPreviewSize();
-        BitmapFactory.Options newOpts = new BitmapFactory.Options();
-        newOpts.inJustDecodeBounds = true;
         YuvImage yuvimage = new YuvImage(
                 data,
                 ImageFormat.NV21,
-                previewSize.width,
                 previewSize.height,
+                previewSize.width,
                 null);
-        baos = new ByteArrayOutputStream();
-        yuvimage.compressToJpeg(new Rect(0, 0, previewSize.width, previewSize.height), 100, baos);// 80--JPG图片的质量[0-100],100最高
-        rawImage = baos.toByteArray();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        yuvimage.compressToJpeg(new Rect(0, 0, previewSize.height, previewSize.width), 100, baos);// 80--JPG图片的质量[0-100],100最高
+        time = System.currentTimeMillis() - time;
+       // Log.i("compress time", time + "");
+        time = System.currentTimeMillis();
+        byte[] rawImage = baos.toByteArray();
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inPreferredConfig = Bitmap.Config.RGB_565;
         Bitmap bitmap = BitmapFactory.decodeByteArray(rawImage, 0, rawImage.length, options);
-        Matrix matrix = new Matrix();
-        matrix.postRotate(90);
-        Bitmap resizedBitmap = Bitmap.createBitmap(bitmap, 0, 0,
-                bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-        bitmap.recycle();
-        bitmap = null;
-
+//        Matrix matrix = new Matrix();
+//        matrix.postRotate(90);
+//        Bitmap resizedBitmap = Bitmap.createBitmap(bitmap, 0, 0,
+//                bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+//        bitmap.recycle();
+//        bitmap = null;
         time = System.currentTimeMillis() - time;
-        Log.i("asdasdawda", time + "");
-        return resizedBitmap;
+        //Log.i("Bitmap time", time + "");
+        return bitmap;
     }
 
 
@@ -152,8 +162,8 @@ public class MainActivity extends AppCompatActivity {
             camera = Camera.open(0);
             Camera.Parameters params = camera.getParameters();
             List<Camera.Size> sizes = params.getSupportedPreviewSizes();
-            params.setPreviewSize(800, 600);
-            camera.setParameters(params);
+            params.setPreviewSize(800, 480);
+//            camera.setParameters(params);
             try {
                 camera.setDisplayOrientation(90);
                 camera.setPreviewDisplay(holder);
